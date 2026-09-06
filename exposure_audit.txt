@@ -1,0 +1,79 @@
+######## PRODUCTION EXPOSURE AUDIT — 2026-09-06T16:04:07Z ########
+
+=== [1a] PORT 9546 EXPOSURE (yml/yaml/toml, non-test) ===
+./docker/config/coordinator/coordinator-config-v2.toml:347:json-rpc-port = 9546
+
+=== [1b] AUTH OPTIONS DI API COORDINATOR ===
+--- config [api] section ---
+[api]
+observability-port = 9545
+json-rpc-port = 9546
+--- grep auth/jwt/apikey/bearer di source ---
+coordinator/app/src/main/kotlin/lineth/coordinator/api/requesthandlers/ConflationTargetCheckpointResumeRequestHandler.kt:7:import io.vertx.ext.auth.User
+coordinator/app/src/main/kotlin/lineth/coordinator/api/requesthandlers/ConflationStopJobRequestHandler.kt:8:import io.vertx.ext.auth.User
+coordinator/app/src/main/kotlin/lineth/coordinator/api/requesthandlers/ConflationCreateProverRequestHandler.kt:8:import io.vertx.ext.auth.User
+coordinator/app/src/main/kotlin/lineth/coordinator/api/requesthandlers/ConflationGetJobStatusRequestHandler.kt:8:import io.vertx.ext.auth.User
+
+=== [1c] SELF-GATING: backtesting-directory default ===
+--- di source code ---
+coordinator/app/src/main/kotlin/lineth/coordinator/config/v2/toml/ConflationToml.kt:84:  val backtestingDirectory: Path? = null,
+coordinator/app/src/main/kotlin/lineth/coordinator/config/v2/toml/ConflationToml.kt:243:      backtestingDirectory = backtestingDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/config/v2/ConflationConfig.kt:34:  val backtestingDirectory: Path? = null,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:69:    require(mainCoordinatorConfig.conflation.backtestingDirectory != null) {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:116:        backtestingDirectory = requireNotNull(mainCoordinatorConfig.conflation.backtestingDirectory) {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:117:          "conflation.backtestingDirectory must be set when running in backtesting mode"
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:124:          backtestingDirectory = mainCoordinatorConfig.conflation.backtestingDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:430:      backtestingDirectory: Path,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:433:      val jobDirectory = backtestingDirectory.resolve(conflationBacktestingJobId)
+--- di config dev ---
+28:backtesting-directory = "/data/conflation-backtesting"
+--- semua compose: siapa yang set backtesting-directory ---
+
+=== [1d] DEPLOYMENT MANIFESTS (k8s/helm/terraform) ===
+./contracts/deploy
+./maru/chaos-testing/helm
+./maru/chaos-testing/helm/charts
+(kosong = tidak ada manifest production di repo)
+
+=== [1e] IMAGE & VERSION ===
+Image: consensys/linea-coordinator:1.1.0-20260728-703923b
+Git log:
+b7ee31635 Update poc.sh
+2bd25e87d Update poc.sh
+ab64d2136 Update poc.sh
+0555dbbf4 Update and rename poc_ssrf_dos.sh to poc.sh
+4265d0adc Create poc_ssrf_dos.sh
+
+=== [BONUS 1f] konfirmasi gating dari source: apa yang terjadi kalau backtestingDirectory null? ===
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:69:    require(mainCoordinatorConfig.conflation.backtestingDirectory != null) {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-70-      "Backtesting requests parent directory must be set in conflation config"
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-71-    }
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-72-    require(conflationBacktestingAppConfig.blobCompressorVersion != BlobCompressorVersion.V2) {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-73-      "Blob compressor version 2 is not supported for backtesting"
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-74-    }
+--
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:116:        backtestingDirectory = requireNotNull(mainCoordinatorConfig.conflation.backtestingDirectory) {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:117:          "conflation.backtestingDirectory must be set when running in backtesting mode"
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-118-        },
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-119-        conflationBacktestingJobId = conflationBacktestingAppConfig.jobId(),
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-120-      ),
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-121-      proverB = mainCoordinatorConfig.proversConfig.proverB?.let { proverB ->
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-122-        getUpdatedProverConfig(
+--
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:124:          backtestingDirectory = mainCoordinatorConfig.conflation.backtestingDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-125-          conflationBacktestingJobId = conflationBacktestingAppConfig.jobId(),
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-126-        )
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-127-      },
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-128-    ),
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-129-    traces = run {
+--
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:430:      backtestingDirectory: Path,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-431-      conflationBacktestingJobId: String,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-432-    ): ProverConfig {
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:433:      val jobDirectory = backtestingDirectory.resolve(conflationBacktestingJobId)
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-434-      return proverConfig.copy(
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-435-        execution = proverConfig.execution.copy(
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-436-          requestsDirectory = jobDirectory
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt-437-            .resolve("execution")
+
+######## SELESAI — tersimpan: exposure_audit.txt ########

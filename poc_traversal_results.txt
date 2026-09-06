@@ -1,0 +1,9 @@
+[+] RPC=http://10.10.10.106:9546/ | BESU=http://10.10.10.5:8545 | RANGE=572..573 | DATA=/workspaces/lineth-monorepo/tmp/local
+[+] MITM :12349 — version traversal aktif
+    Job: {"jsonrpc":"2.0","id":1,"result":["572-573--622570955"]}
+[*] Tunggu 120s...
+=== HASIL ===
+(a) Apakah muncul file TRAVTEST di luar jobDirectory (arbitrary write)?
+(b) Nama file request yang benar-benar ditulis:
+(c) Error koordinator soal traversal?
+Cleanup: docker restart coordinator

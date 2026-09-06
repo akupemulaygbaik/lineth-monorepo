@@ -1,0 +1,35 @@
+######## AUDIT: NAMA FILE REQUEST — traversal via tracesEngineVersion? — 2026-09-06T16:31:34Z ########
+=== [A] Di mana nama file request DIBANGUN? (pola etv<version>) ===
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/ProverFileNameProvider.kt:11:  const val EXECUTION_PROOF_SUFFIX = "getZkProof.json"
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/FileBasedExecutionProverClientV2.kt:94: * path/to/prover/requests/<startBlockNumber>-<endBlockNumber>--getZkProof.json
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/FileBasedExecutionProverClientV2.kt:97: * path/to/prover/responses/<startBlockNumber>-<endBlockNumber>-getZkProof.json
+
+=== [B] Di mana requestsDirectory dipakai untuk MENULIS file? ===
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/Config.kt:24:  val requestsDirectory: Path,
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/GenericFileBasedProverClient.kt:44:    createDirectoryIfNotExists(config.requestsDirectory, log)
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/GenericFileBasedProverClient.kt:92:    val requestFilePath = config.requestsDirectory.resolve(requestFileName)
+coordinator/clients/prover-client/file-based-client/src/main/kotlin/lineth/coordinator/clients/prover/GenericFileBasedProverClient.kt:180:      directory = config.requestsDirectory,
+coordinator/clients/prover-client/riscv-client/src/main/kotlin/lineth/coordinator/clients/prover/riscv/FileBasedProverProofTransport.kt:23: * File-based [ProverProofTransport]: the request DTO is written as a JSON file into [FileBasedProverConfig.requestsDirectory]
+coordinator/clients/prover-client/riscv-client/src/main/kotlin/lineth/coordinator/clients/prover/riscv/FileBasedProverProofTransport.kt:42:    GenericFileBasedProverClient.createDirectoryIfNotExists(config.requestsDirectory, log)
+coordinator/clients/prover-client/riscv-client/src/main/kotlin/lineth/coordinator/clients/prover/riscv/FileBasedProverProofTransport.kt:52:      directory = config.requestsDirectory,
+coordinator/clients/prover-client/riscv-client/src/main/kotlin/lineth/coordinator/clients/prover/riscv/FileBasedProverProofTransport.kt:58:    val requestFilePath = config.requestsDirectory.resolve(requestFileNameProvider.getFileName(proofIndex))
+coordinator/app/src/main/kotlin/lineth/coordinator/config/v2/toml/ProverToml.kt:102:      requestsDirectory = Path.of(proverConfigToml.fsRequestsDirectory),
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:202:        configs.proversConfig.proverA.execution.requestsDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:203:        configs.proversConfig.proverA.blobCompression?.requestsDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:204:        configs.proversConfig.proverA.proofAggregation.requestsDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:205:        configs.proversConfig.proverB?.execution?.requestsDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:206:        configs.proversConfig.proverB?.blobCompression?.requestsDirectory,
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflation/ConflationAppV1.kt:207:        configs.proversConfig.proverB?.proofAggregation?.requestsDirectory,
+
+=== [C] Kode penulisan file request (full context) ===
+
+=== [D] Apakah tracesEngineVersion masuk ke NAMA file? ===
+
+=== [E] SANITASI: adakah validasi/normalisasi path sebelum write? ===
+(kosong = TIDAK ada sanitasi path di proofcreation)
+
+=== [F] Bagaimana file ditulis: createDirectories parent? (menentukan traversal jalan atau tidak) ===
+
+=== [G] conflatedExecutionTracesFile: di mana DIBACA (arbitrary READ potential)? ===
+
+######## SELESAI — tersimpan: filename_audit.txt ########

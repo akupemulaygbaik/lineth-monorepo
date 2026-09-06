@@ -1,0 +1,137 @@
+######## AUDIT: BISAkah POISON BACKTESTING SAMPAI L1 — 2026-09-06T16:23:41Z ########
+=== [A] JALUR A: komponen apa yang di-instantiate ConflationBacktestingApp? ===
+(kosong pada submission-related = job TIDAK punya komponen L1 submission)
+
+=== [B] PEMBANDING: komponen LIVE pipeline (L1DependentApp) ===
+BlockchainClientHelper.kt
+CoordinatorApp.kt
+CoordinatorAppCli.kt
+CoordinatorAppMain.kt
+DisabledLongRunningService.kt
+L1FinalizationMonitorApp.kt
+L1RelayingAppV1.kt
+L2NetworkGasPricingService.kt
+L2PricingApp.kt
+LastFinalizedBlockProvider.kt
+MessageAnchoringAppConfigurator.kt
+SignerFactory.kt
+conflation
+conflationbacktesting
+
+=== [C] Apa saja service yang ditarik masuk oleh backtesting job (semua file di modul) ===
+BacktestingProgressTracker.kt
+ConflationBacktestingApp.kt
+ConflationBacktestingConfig.kt
+ConflationBacktestingService.kt
+InMemoryConsecutiveProvenBlobsProvider.kt
+3:import io.vertx.core.Vertx
+4:import linea.timer.TimerSchedule
+5:import linea.timer.VertxPeriodicPollingService
+6:import lineth.coordinator.config.v2.CoordinatorConfig
+7:import net.consensys.linea.jsonrpc.client.VertxHttpJsonRpcClientFactory
+8:import net.consensys.linea.metrics.MetricsFacade
+9:import org.apache.logging.log4j.LogManager
+10:import org.apache.logging.log4j.Logger
+11:import tech.pegasys.teku.infrastructure.async.SafeFuture
+12:import java.util.concurrent.ConcurrentHashMap
+13:import kotlin.time.Duration.Companion.seconds
+15:class ConflationBacktestingService(
+
+=== [D] JALUR B: getUpdatedProverConfig — mana yang di-remap, mana yang tidak ===
+428:    fun getUpdatedProverConfig(
+429-      proverConfig: ProverConfig,
+430-      backtestingDirectory: Path,
+431-      conflationBacktestingJobId: String,
+432-    ): ProverConfig {
+433-      val jobDirectory = backtestingDirectory.resolve(conflationBacktestingJobId)
+434-      return proverConfig.copy(
+435-        execution = proverConfig.execution.copy(
+436-          requestsDirectory = jobDirectory
+437-            .resolve("execution")
+438-            .resolve("requests"),
+439-          responsesDirectory = jobDirectory
+440-            .resolve("execution")
+441-            .resolve("responses"),
+442-        ),
+443-        blobCompression = proverConfig.blobCompression?.copy(
+444-          requestsDirectory = jobDirectory
+445-            .resolve("compression")
+446-            .resolve("requests"),
+447-          responsesDirectory = jobDirectory
+448-            .resolve("compression")
+449-            .resolve("responses"),
+450-        ),
+451-        proofAggregation = proverConfig.proofAggregation.copy(
+452-          requestsDirectory = jobDirectory
+453-            .resolve("aggregation")
+454-            .resolve("requests"),
+455-          responsesDirectory = jobDirectory
+456-            .resolve("aggregation")
+457-            .resolve("responses"),
+458-        ),
+459-      )
+460-    }
+461-  }
+462-}
+--> cari: apakah execution/compression/aggregation di-remap TAPI invalidity TIDAK?
+
+=== [E] Apakah backtesting MENGGUNAKAN invalidity prover? ===
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:353:    invalidityProofProvider = InvalidityProofProviderImpl(DisabledForcedTransactionsDao()),
+--> siapa yang menulis request ke invalidity/requests?
+
+=== [F] JALUR C: apakah backtesting menulis ke DB yang sama dengan live? ===
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/InMemoryConsecutiveProvenBlobsProvider.kt:26: * from the given fromBlockNumber, mirroring the behaviour of the Postgres-backed implementation.
+coordinator/app/src/main/kotlin/lineth/coordinator/app/conflationbacktesting/ConflationBacktestingApp.kt:49:import lineth.persistence.DisabledForcedTransactionsDao
+(kosong = backtesting tidak menyentuh DB → jalur C tertutup)
+
+=== [G] RUNTIME: struktur direktori aktual (shared vs per-job) ===
+<DATA>
+<DATA>/prover
+<DATA>/prover/v3
+<DATA>/prover/v3/compression
+<DATA>/prover/v3/compression/requests
+<DATA>/prover/v3/compression/requests-done
+<DATA>/prover/v3/compression/responses
+<DATA>/prover/v3/execution
+<DATA>/prover/v3/execution/requests
+<DATA>/prover/v3/execution/requests-done
+<DATA>/prover/v3/execution/responses
+<DATA>/prover/v3/aggregation
+<DATA>/prover/v3/aggregation/requests
+<DATA>/prover/v3/aggregation/requests-done
+<DATA>/prover/v3/aggregation/responses
+<DATA>/prover/v3/invalidity
+<DATA>/prover/v3/invalidity/requests
+<DATA>/prover/v3/invalidity/requests-done
+<DATA>/prover/v3/invalidity/responses
+<DATA>/traces
+<DATA>/traces/v2
+<DATA>/traces/v2/conflated
+<DATA>/conflation-backtesting
+<DATA>/conflation-backtesting/34-35-586141236
+<DATA>/conflation-backtesting/34-35-586141236/compression
+--> isi invalidity (shared) vs conflation-backtesting (per-job):
+total 8
+drwxrwxrwx+ 2 root root 4096 Sep  6 15:00 .
+drwxrwxrwx+ 5 root root 4096 Sep  6 15:00 ..
+108-109--1959398762
+108-109--33759800
+108-109-1719550236
+108-109-1955850100
+169-170--281722836
+169-170--518022700
+169-170-1431620300
+169-170-1501605224
+169-170-97995598
+179-180--270415788
+
+=== [H] RUNTIME: apakah ada file yang ditulis job backtesting ke direktori LIVE? ===
+(file baru di prover/v3/ dari 3 jam terakhir = job backtesting menulis ke live dir)
+
+=== [I] E2E TEST backtesting — apa perilaku yang di-assert oleh test resmi? ===
+--> test resmi menunjukkan perilaku yang EXPECTED (termasuk apakah L1 disentuh)
+
+=== [J] Signer di backtesting job? (tanpa signer = tidak BISA kirim tx L1) ===
+(backtesting job TANPA signer wiring = tidak mungkin submit tx L1 apa pun)
+
+######## SELESAI — tersimpan: l1_reach_audit.txt ########

