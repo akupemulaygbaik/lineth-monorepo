@@ -1,4 +1,3 @@
-cat << 'FINALEOF' > poc_ssrf_final.sh
 #!/bin/bash
 # ==============================================================================
 # LINEA COORDINATOR SSRF - FINAL UNIFIED PoC (v15)
