@@ -40,6 +40,11 @@
 # ==============================================================================
 set -u
 
+# Configurable via env, with defaults (fixes last hardcoded items)
+OOB_PORT="${OOB_PORT:-12345}"          # attacker server port
+BH_PORT="${BH_PORT:-9999}"             # blackhole port (verify closed first)
+A3_HOSTNAME="${A3_HOSTNAME:-http://l2-node-besu:8545/}"  # live-endpoint string from public repo
+
 # --- output ---
 OUT="poc_results.txt"
 : > "$OUT"
