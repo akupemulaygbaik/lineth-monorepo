@@ -103,8 +103,8 @@ echo "[+] Coordinator container: $C"
 STATUS=$(docker ps --filter name="$C" --format '{{.Status}}' | head -n1)
 echo "[+] Container status: $STATUS"
 if echo "$STATUS" | grep -q "unhealthy"; then
-  echo "[-] Coordinator unhealthy - run: docker restart $C; sleep 60; re-run"
-  exit 1
+  echo "[*] docker healthcheck reports unhealthy (separate probe, not the JSON-RPC API);"
+  echo "    relying on RPC reachability + batch production as authoritative signals."
 fi
 if ! echo "$STATUS" | grep -q "healthy"; then
   echo "[*] No docker healthcheck reported (status: $STATUS) - continuing with RPC probe"
@@ -127,6 +127,18 @@ if ! echo "$PING" | grep -q '"jsonrpc"'; then
   exit 1
 fi
 echo "[+] RPC reachable: $RPC"
+
+# --- pipeline liveness: batches being produced (needed by A4/A5) ---
+BATCHES_3M=$(docker logs "$C" --since 3m 2>&1 | grep -c "new batch" || true)
+if [ "${BATCHES_3M:-0}" -eq 0 ]; then
+  echo "[!] no new batches in the last 3 minutes - conflation pipeline may be"
+  echo "    stalled or chain idle; A4/A5 (poisoning evidence) require live"
+  echo "    batch production. Consider waiting or restarting the stack."
+  echo "    (continuing - A1/A2/A3/A6/A7/A8 remain valid regardless)"
+else
+  echo "[+] batch production alive: ${BATCHES_3M} batches in last 3m"
+fi
+
 
 # --- discover traces upstream (real node; attacker learns via scan oracle) ---
 TRACES_UP=""

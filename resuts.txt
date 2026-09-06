@@ -1,0 +1,12 @@
+######################################################################
+#  LINEA COORDINATOR SSRF - END-TO-END IMPACT PoC
+#  started: 2026-09-06T19:15:34Z
+#  run marker: SPOOF1788722134
+#  config: OOB_PORT=12345 BH_PORT=9999
+######################################################################
+
+=== [0] HARNESS SETUP ===============================================
+[+] blackhole oracle port: 9999 (closed)
+[+] Coordinator container: coordinator
+[+] Container status: Up 5 minutes (unhealthy)
+[-] Coordinator unhealthy - run: docker restart coordinator; sleep 60; re-run
